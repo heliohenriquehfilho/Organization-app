@@ -8,6 +8,7 @@ from kivy.uix.checkbox import CheckBox
 from kivy.uix.dropdown import DropDown
 from kivy.storage.jsonstore import JsonStore
 from kivy.uix.scrollview import ScrollView
+from datetime import datetime
 
 
 """
@@ -16,7 +17,7 @@ Feito -> 02 - Remover Aulas
 Feito -> 03 - Adicionar Tarefas
 Feito -> 04 - Concluir Tarefas
 Feito -> 05 - Remover Tarefas
-06 - Salvar Progresso
+Feito -> 06 - Salvar Progresso
 07 - Gráfico Progresso
 08 - Adicionar Peso
 09 - Adicionar água
@@ -248,7 +249,7 @@ class TarefasWindow(Widget):
         self.add_widget(MainMenu())
 
     def add_task(self, instance):
-        """Adiciona uma nova tarefa à lista."""
+        """Adiciona uma nova tarefa à lista e salva no arquivo JSON do usuário."""
         task_text = self.task_input.text.strip()
         
         if task_text:
@@ -263,42 +264,54 @@ class TarefasWindow(Widget):
             task_label = Label(text=task_text, size_hint=(1, None), height=40)
             task_layout.add_widget(task_label)
 
-            # Adiciona a tarefa à lista
+            # Adiciona o layout da tarefa à lista de tarefas visíveis
             self.task_list_layout.add_widget(task_layout)
 
-            # Recupera as aulas existentes (se houver) e adiciona a nova aula
+            # Adiciona a nova tarefa ao dicionário de tarefas do usuário
+            self.tasks[task_text] = False  # Inicia como não concluída
+
+            # Atualiza o arquivo JSON com as tarefas do usuário "user1"
             if self.store.exists("user1"):
                 existing_data = self.store.get("user1")
-                existing_data["tarefas"].update(self.tasks[task_text])
-                self.store.put("user1", aulas=existing_data["taefas"])
+                # Atualiza o dicionário de tarefas com a nova tarefa
+                existing_data["tasks"].update(self.tasks)
+                self.store.put("user1", **existing_data)
             else:
-                self.store.put("user1", tarefas=self.tasks[task_text])
-            
-            # Salva a tarefa no dicionário com o checkbox
-            self.tasks[task_text] = checkbox
+                self.store.put("user1", tasks=self.tasks)
 
             # Limpa o campo de entrada
             self.task_input.text = ""
 
-
     def remove_completed_tasks(self, instance):
-        """Remove tarefas que estão marcadas como concluídas."""
-        completed_tasks = [task for task, checkbox in self.tasks.items() if checkbox.active]
+        """Remove tarefas que estão marcadas como concluídas e atualiza o JSON com a data de conclusão."""
+        completed_tasks = [task for task, is_active in self.tasks.items() if not is_active]  # Tarefas concluídas
 
         for task in completed_tasks:
-            # Encontra e remove o layout correspondente na interface
-            for task_layout in self.task_list_layout.children[:]:
+            # Encontre e remova o layout correspondente na interface
+            for task_layout in self.task_list_layout.children[:]:  # Iterando pela lista de layouts
                 # Encontre o Label dentro do layout da tarefa
                 task_label = next((widget for widget in task_layout.children if isinstance(widget, Label)), None)
                 
-                # Se o Label do layout corresponde ao nome da tarefa, remova o layout
                 if task_label and task_label.text == task:
-                    self.task_list_layout.remove_widget(task_layout)
-                    break
-            # Remove a tarefa do dicionário
+                    self.task_list_layout.remove_widget(task_layout)  # Remove o layout da interface
+                    break  # Tarefa encontrada, interrompe o loop
+
+            # Registra a data e a hora de conclusão no JSON
+            completion_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+            # Atualiza a tarefa no JSON com o status de concluída e a data e hora
+            if self.store.exists("user1"):
+                existing_data = self.store.get("user1")
+                if "tasks" in existing_data and task in existing_data["tasks"]:
+                    existing_data["tasks"][task] = {
+                        "completed": True,
+                        "completion_time": completion_time
+                    }
+                self.store.put("user1", **existing_data)
+
+            # Remove a tarefa do dicionário local de tarefas
             del self.tasks[task]
-
-
+            
 class MainWindow(App):
     def build(self):
         return MainMenu()
